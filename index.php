@@ -37,17 +37,32 @@ if (isset($_GET['vote']) && isset($_GET['id'])) {
 // --- 2. Handle Flagging / Reporting ---
 if (isset($_GET['flag']) && isset($_GET['id'])) {
     $quoteId = (int)$_GET['id'];
+    
+    // Set the abuse threshold here (e.g., 3 unique IPs required to drop a quote)
+    $flagThreshold = 3; 
+
+    // Check if this specific IP has already flagged this quote
     $stmt = $db->prepare("SELECT COUNT(*) FROM ip_tracking WHERE ip_address = :ip AND target_id = :id AND action = 'flag'");
     $stmt->execute([':ip' => $ipAddress, ':id' => $quoteId]);
     
     if (!$stmt->fetchColumn()) {
         $db->beginTransaction();
         try {
+            // 1. Log this user's flag
             $stmt = $db->prepare("INSERT INTO ip_tracking (ip_address, action, target_id) VALUES (:ip, 'flag', :id)");
             $stmt->execute([':ip' => $ipAddress, ':id' => $quoteId]);
 
-            $stmt = $db->prepare("UPDATE quotes SET status = 'pending' WHERE id = :id AND status = 'approved'");
+            // 2. Check the total number of flags this quote has received
+            $stmt = $db->prepare("SELECT COUNT(*) FROM ip_tracking WHERE target_id = :id AND action = 'flag'");
             $stmt->execute([':id' => $quoteId]);
+            $totalFlags = $stmt->fetchColumn();
+
+            // 3. Only demote to 'pending' if the threshold is met
+            if ($totalFlags >= $flagThreshold) {
+                $stmt = $db->prepare("UPDATE quotes SET status = 'pending' WHERE id = :id AND status = 'approved'");
+                $stmt->execute([':id' => $quoteId]);
+            }
+            
             $db->commit();
         } catch (Exception $e) {
             $db->rollBack();
