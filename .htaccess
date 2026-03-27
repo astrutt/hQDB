@@ -1,0 +1,4 @@
+# /opt/hqdb/.htaccess
+# Completely deny web access to this directory (Apache 2.4 syntax)
+Require all denied
+
