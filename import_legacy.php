@@ -1,4 +1,8 @@
 <?php
+
+// Version: 1.1.6
+// Last Updated: 2026-03-27
+
 // import_legacy.php
 // Version: 1.0
 // Execute via CLI only to preserve database integrity

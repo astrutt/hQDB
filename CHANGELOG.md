@@ -1,9 +1,15 @@
 # Changelog
 All notable changes to the hQDB project will be documented in this file.
 
+## [1.1.6] - 2026-03-27
+### Changed
+- Hardened the flagging system: `[ x ]` drop operator is now strictly limited to authenticated moderators and administrators.
+- Integrated core `Auth` class session handling into the public interface to verify moderator status natively.
+- Removed public-facing flagging mechanism entirely to eliminate abuse vectors and moderator fatigue.
+
 ## [1.1.4] - 2026-03-27
 ### Changed
-- Flagging mechanism (`index.php`) now requires a threshold of 3 unique IP addresses to demote a quote to the pending queue, mitigating abuse.
+- Temporary mitigation: Flagging mechanism required a threshold of 3 unique IP addresses to demote a quote. (Replaced in v1.1.6).
 
 ## [1.1.3] - 2026-03-27
 ### Added

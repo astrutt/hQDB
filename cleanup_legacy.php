@@ -1,4 +1,8 @@
 <?php
+
+// Version: 1.1.6
+// Last Updated: 2026-03-27
+
 // cleanup_legacy.php
 // Decodes double-escaped HTML and <br> tags from imported archives.
 

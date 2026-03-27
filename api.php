@@ -1,5 +1,5 @@
 <?php
-// Version: 1.1.0
+// Version: 1.1.6
 // Last Updated: 2026-03-27
 
 // api.php
@@ -10,7 +10,7 @@ header('Content-Type: application/json');
 // --- Configuration ---
 // Generate a strong string here (e.g., openssl rand -hex 32)
 // CloudBot will need to send this in the header or POST body to submit quotes.
-$apiKey = 'changeme_to_a_secure_random_string'; 
+$apiKey = 'CHANGEMEEEEEEEEEEEEEEEEEEEEEEEE'; 
 
 $db = DB::getInstance();
 $method = $_SERVER['REQUEST_METHOD'];

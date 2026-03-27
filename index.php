@@ -1,14 +1,19 @@
 <?php
 // index.php
-// Version: 1.1.3
+// Version: 1.1.6
 // Last Updated: 2026-03-27
 
 require_once 'db.php';
+require_once 'auth.php'; // Properly load the existing Auth class
 
 $db = DB::getInstance();
 $ipAddress = $_SERVER['REMOTE_ADDR'];
 
-// --- 1. Handle Voting Logic ---
+// --- 1. Moderator Authentication Check ---
+$auth = new Auth();
+$isMod = $auth->checkSession();
+
+// --- 2. Handle Voting Logic ---
 if (isset($_GET['vote']) && isset($_GET['id'])) {
     $quoteId = (int)$_GET['id'];
     $voteType = $_GET['vote'] === 'up' ? 'upvote' : 'downvote';
@@ -34,45 +39,19 @@ if (isset($_GET['vote']) && isset($_GET['id'])) {
     exit;
 }
 
-// --- 2. Handle Flagging / Reporting ---
-if (isset($_GET['flag']) && isset($_GET['id'])) {
+// --- 3. Handle Flagging (MODERATORS ONLY) ---
+// Bypasses the 3-flag threshold since the request comes from an authenticated mod
+if ($isMod && isset($_GET['flag']) && isset($_GET['id'])) {
     $quoteId = (int)$_GET['id'];
     
-    // Set the abuse threshold here (e.g., 3 unique IPs required to drop a quote)
-    $flagThreshold = 3; 
-
-    // Check if this specific IP has already flagged this quote
-    $stmt = $db->prepare("SELECT COUNT(*) FROM ip_tracking WHERE ip_address = :ip AND target_id = :id AND action = 'flag'");
-    $stmt->execute([':ip' => $ipAddress, ':id' => $quoteId]);
+    $stmt = $db->prepare("UPDATE quotes SET status = 'pending' WHERE id = :id AND status = 'approved'");
+    $stmt->execute([':id' => $quoteId]);
     
-    if (!$stmt->fetchColumn()) {
-        $db->beginTransaction();
-        try {
-            // 1. Log this user's flag
-            $stmt = $db->prepare("INSERT INTO ip_tracking (ip_address, action, target_id) VALUES (:ip, 'flag', :id)");
-            $stmt->execute([':ip' => $ipAddress, ':id' => $quoteId]);
-
-            // 2. Check the total number of flags this quote has received
-            $stmt = $db->prepare("SELECT COUNT(*) FROM ip_tracking WHERE target_id = :id AND action = 'flag'");
-            $stmt->execute([':id' => $quoteId]);
-            $totalFlags = $stmt->fetchColumn();
-
-            // 3. Only demote to 'pending' if the threshold is met
-            if ($totalFlags >= $flagThreshold) {
-                $stmt = $db->prepare("UPDATE quotes SET status = 'pending' WHERE id = :id AND status = 'approved'");
-                $stmt->execute([':id' => $quoteId]);
-            }
-            
-            $db->commit();
-        } catch (Exception $e) {
-            $db->rollBack();
-        }
-    }
     header("Location: " . ($_SERVER['HTTP_REFERER'] ?? '?v=latest'));
     exit;
 }
 
-// --- 3. Fetch Statistics ---
+// --- 4. Fetch Statistics ---
 $statsStmt = $db->query("
     SELECT 
         (SELECT COUNT(*) FROM quotes WHERE status = 'approved') as approved_count,
@@ -80,7 +59,7 @@ $statsStmt = $db->query("
 ");
 $stats = $statsStmt->fetch();
 
-// --- 4. Handle Routing & Pagination ---
+// --- 5. Handle Routing & Pagination ---
 $view = $_GET['v'] ?? 'latest';
 $page = max(1, (int)($_GET['p'] ?? 1));
 $perPage = 50;
@@ -90,7 +69,6 @@ $query = "SELECT id, quote_text, score, created_at FROM quotes WHERE status = 'a
 $countQuery = "SELECT COUNT(*) FROM quotes WHERE status = 'approved' ";
 $orderBy = "ORDER BY created_at DESC";
 
-// Base query string builder to persist state across pagination
 $qs = "?v=" . urlencode($view);
 
 switch ($view) {
@@ -105,20 +83,19 @@ switch ($view) {
         $search = $_GET['q'] ?? '';
         $query .= "AND quote_text LIKE :search ";
         $countQuery .= "AND quote_text LIKE :search ";
-        $qs .= "&q=" . urlencode($search); // Persist search term
+        $qs .= "&q=" . urlencode($search); 
         break;
     case 'latest':
     default: $orderBy = "ORDER BY id DESC"; break;
 }
 
-// Get total rows for pagination dynamically
 if ($view === 'search') {
     $countStmt = $db->prepare($countQuery);
     $countStmt->bindValue(':search', '%' . $search . '%');
     $countStmt->execute();
     $totalQuotes = $countStmt->fetchColumn();
 } elseif ($view === 'view' || $view === 'random') {
-    $totalQuotes = 0; // Pagination hidden anyway
+    $totalQuotes = 0; 
 } else {
     $totalQuotes = $db->query($countQuery)->fetchColumn();
 }
@@ -176,6 +153,10 @@ $quotes = $stmt->fetchAll();
         .footer { margin-top: 40px; border-top: 1px dashed #333; padding-top: 15px; text-align: center; font-size: 0.85em; color: #666; }
         .footer a { color: #888; }
         .footer a:hover { color: #00ff00; background: none; }
+        
+        /* Mod specific styling */
+        .mod-flag { color: #ff5555; }
+        .mod-flag:hover { background: #ff0000; color: #ffffff; }
     </style>
 </head>
 <body>
@@ -211,7 +192,11 @@ $quotes = $stmt->fetchAll();
             <div class="quote-block">
                 <div class="quote-header">
                     <a href="?v=view&id=<?= $q['id'] ?>">#<?= $q['id'] ?></a>
-                    <span>[ <a href="?vote=up&id=<?= $q['id'] ?>">+</a> | <a href="?vote=down&id=<?= $q['id'] ?>">-</a> | <a href="?flag=1&id=<?= $q['id'] ?>" title="Report to Moderation" onclick="return confirm('Execute DROP? This will pull quote #<?= $q['id'] ?> for moderation review.');">x</a> ]</span>
+                    <span>[ <a href="?vote=up&id=<?= $q['id'] ?>">+</a> | <a href="?vote=down&id=<?= $q['id'] ?>">-</a> 
+                    <?php if ($isMod): ?>
+                        | <a href="?flag=1&id=<?= $q['id'] ?>" class="mod-flag" title="Mod Action: Send back to queue" onclick="return confirm('MOD: Execute DROP? Send quote #<?= $q['id'] ?> back to moderation queue?');">x</a> 
+                    <?php endif; ?>
+                    ]</span>
                     <span class="score"><?= $q['score'] ?></span>
                 </div>
                 <div class="quote-body"><pre><?= htmlspecialchars($q['quote_text']) ?></pre></div>
@@ -264,4 +249,3 @@ $quotes = $stmt->fetchAll();
 
 </body>
 </html>
-
