@@ -1,5 +1,5 @@
 # hQDB (hacker Quote Database)
-**Version:** 1.1.0
+**Version:** 1.1.4
 
 hQDB is a lightweight, SQLite-backed archive designed to preserve network history, out-of-context IRC highlights, and terminal output.
 
@@ -16,3 +16,4 @@ hQDB is a lightweight, SQLite-backed archive designed to preserve network histor
 ## Administration
 Default installation creates an admin user. Access the moderation queue via `/mod/`.
 For network issues or abuse reports, contact the network administrators.
+
